@@ -157,24 +157,18 @@ function updateOrientation() {
 }
 
 function exitFullscreenMode() {
-  // 1. 먼저 세로 방향 잠금 → orientation 이벤트가 다시 전체화면 진입하는 걸 막음
+  // exiting 플래그로 orientation 이벤트가 다시 전체화면 진입하는 걸 차단
   exiting = true;
   document.body.classList.remove('is-landscape');
-  try {
-    if (screen.orientation && screen.orientation.lock) {
-      screen.orientation.lock('portrait').catch(() => {});
-    }
-  } catch(e) {}
-  // 2. 전체화면 해제
+
+  // 전체화면 해제
   if (document.fullscreenElement) {
     const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
     if (fn) fn.call(document).catch(() => {});
   }
-  // 3. 잠시 후 잠금 해제 (세로 고정 유지 후 자유롭게)
-  setTimeout(() => {
-    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch(e) {}
-    exiting = false;
-  }, 1500);
+
+  // 5초간 재진입 차단 (폰을 세로로 돌릴 시간 확보)
+  setTimeout(() => { exiting = false; }, 5000);
 }
 
 window.addEventListener('orientationchange', () => setTimeout(updateOrientation, 350));
