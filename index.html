@@ -30,7 +30,6 @@
   .book.single { width:min(55vw,calc(70vh * 14/11)); height:min(calc(55vw * 11/14),70vh); }
   .book.spread { width:min(92vw,calc(70vh * 28/11)); height:min(calc(92vw * 11/28),70vh); }
 
-  /* 모바일 가로 모드 */
   @media (max-width:900px) and (orientation:landscape) {
     #album-screen { gap:0.4rem; padding:2px; }
     .book.single { width:min(44vw,calc(88vh * 14/11)); height:min(calc(44vw * 11/14),88vh); }
@@ -55,16 +54,15 @@
     display:none; position:fixed; inset:0;
     background:rgba(0,0,0,0.88);
     z-index:100; touch-action:none;
-    align-items:center; justify-content:center;
+    overflow:hidden;
   }
-  #zoom-overlay.active { display:flex; }
+  #zoom-overlay.active { display:block; }
   #zoom-img {
     position:absolute;
-    transform-origin:center center;
     touch-action:none;
     user-select:none;
     -webkit-user-drag:none;
-    max-width:none; max-height:none;
+    object-fit:contain;
   }
   /* PC에서는 확대 완전 비활성 */
   @media (hover:hover) and (pointer:fine) {
@@ -114,6 +112,9 @@ const isMobile = !window.matchMedia('(hover:hover) and (pointer:fine)').matches;
 
 let pages = [], cur = 0;
 const cache = {};
+let zoomed = false;
+let lastTapTime = 0;
+let lastTapX = 0, lastTapY = 0;
 
 /* ── 가로 모드 전체화면 (모바일만) ── */
 function handleOrientation() {
@@ -148,7 +149,7 @@ async function loadAlbum() {
       + `&fields=files(id,name)&orderBy=name&pageSize=200&key=${API_KEY}`;
     const data = await fetch(url).then(r => r.json());
     if (data.error) { showErr('드라이브 오류:\n' + data.error.message); return; }
-    if (!data.files || !data.files.length) { showErr('사진을 찾을 수 없습니다.\n드라이브 폴더 공유 설정을 확인해 주세요.'); return; }
+    if (!data.files || !data.files.length) { showErr('사진을 찾을 수 없습니다.'); return; }
     pages = data.files.map(f => {
       const base = f.name.replace(/\.[^.]+$/, '').toLowerCase();
       const sortKey = base === 'cover' ? '000000' : base === 'back' ? 'zzzzzz' : base.replace(/\D/g,'').padStart(6,'0');
@@ -179,7 +180,7 @@ function render() {
     book.innerHTML = '<div class="loading-spinner"></div>';
     const img = new Image();
     img.onload = () => { cache[p.url] = img; showImg(book, img.cloneNode(), p.type); };
-    img.onerror = () => { book.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:#aaa;">이미지 오류</div>'; };
+    img.onerror = () => { book.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:13px;">이미지 오류</div>'; };
     img.src = p.url;
   }
   preload(cur+1); preload(cur+2); preload(cur-1); preload(cur-2);
@@ -202,84 +203,91 @@ function go(dir) {
   setTimeout(() => { cur = next; render(); book.classList.remove('turning'); }, 200);
 }
 
-/* ── 키보드 ── */
-document.addEventListener('keydown', e => {
-  if (e.key === 'ArrowRight') go(1);
-  if (e.key === 'ArrowLeft')  go(-1);
-  if (e.key === 'Escape' && zoomed) toggleZoom();
-});
-
-/* ── 터치: 스와이프 + 더블탭 ── */
-let tx = 0, ty = 0, lastTap = 0, zoomed = false;
-
-document.addEventListener('touchstart', e => {
-  if (zoomed) return;
-  tx = e.touches[0].clientX;
-  ty = e.touches[0].clientY;
-}, {passive:true});
-
-document.addEventListener('touchend', e => {
-  const dx = e.changedTouches[0].clientX - tx;
-  const dy = e.changedTouches[0].clientY - ty;
+/* ── 더블탭 감지 공통 함수 ── */
+function checkDoubleTap(x, y) {
   const now = Date.now();
-  const isDoubleTap = now - lastTap < 300 && Math.abs(dx) < 20 && Math.abs(dy) < 20;
-
-  if (isDoubleTap) {
-    if (isMobile) toggleZoom();
-    lastTap = 0;
-    return;
-  }
-  lastTap = now;
-
-  if (!zoomed && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1);
-}, {passive:true});
-
-/* ── 확대/축소 토글 ── */
-function toggleZoom() {
-  zoomed = !zoomed;
-  const overlay = document.getElementById('zoom-overlay');
-  const zImg = document.getElementById('zoom-img');
-  if (zoomed) {
-    zX = 0; zY = 0;
-    zImg.src = pages[cur].url;
-    // 화면에 꽉 차는 크기: 가로는 100vw, 세로는 100vh 중 큰 쪽
-    zImg.style.width = '100vw';
-    zImg.style.height = '100vh';
-    zImg.style.objectFit = 'contain';
-    zImg.style.transform = 'translate(0px, 0px)';
-    overlay.classList.add('active');
-  } else {
-    overlay.classList.remove('active');
-    zImg.src = '';
-  }
+  const dx = Math.abs(x - lastTapX);
+  const dy = Math.abs(y - lastTapY);
+  const isDouble = (now - lastTapTime < 300) && dx < 30 && dy < 30;
+  lastTapTime = now;
+  lastTapX = x; lastTapY = y;
+  return isDouble;
 }
 
-/* ── 확대 상태에서 터치 드래그 ── */
-let zX = 0, zY = 0, dragSX = 0, dragSY = 0;
+/* ── 앨범 화면 터치 (스와이프 + 더블탭 확대) ── */
+let swipeSX = 0, swipeSY = 0;
 
+document.getElementById('album-screen').addEventListener('touchstart', e => {
+  swipeSX = e.touches[0].clientX;
+  swipeSY = e.touches[0].clientY;
+}, {passive:true});
+
+document.getElementById('album-screen').addEventListener('touchend', e => {
+  const x = e.changedTouches[0].clientX;
+  const y = e.changedTouches[0].clientY;
+  const dx = x - swipeSX;
+  const dy = y - swipeSY;
+
+  if (checkDoubleTap(x, y) && isMobile) {
+    openZoom(); return;
+  }
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1);
+}, {passive:true});
+
+/* ── 확대 오버레이 ── */
+let zX = 0, zY = 0, zDragSX = 0, zDragSY = 0;
+
+function openZoom() {
+  zoomed = true;
+  const overlay = document.getElementById('zoom-overlay');
+  const zImg = document.getElementById('zoom-img');
+  zX = 0; zY = 0;
+  zImg.src = pages[cur].url;
+  // 화면 꽉 차게: 가로 100vw, 세로 100vh, object-fit contain으로 비율 유지
+  zImg.style.width  = window.innerWidth + 'px';
+  zImg.style.height = window.innerHeight + 'px';
+  zImg.style.left   = '0px';
+  zImg.style.top    = '0px';
+  zImg.style.transform = 'translate(0px, 0px)';
+  overlay.classList.add('active');
+  // 더블탭 타이머 리셋 (openZoom 직후 바로 닫히지 않게)
+  lastTapTime = 0;
+}
+
+function closeZoom() {
+  zoomed = false;
+  document.getElementById('zoom-overlay').classList.remove('active');
+  lastTapTime = 0;
+}
+
+/* 오버레이 터치: 더블탭 닫기 + 드래그 이동 */
 const zOverlay = document.getElementById('zoom-overlay');
 
 zOverlay.addEventListener('touchstart', e => {
-  dragSX = e.touches[0].clientX - zX;
-  dragSY = e.touches[0].clientY - zY;
+  zDragSX = e.touches[0].clientX - zX;
+  zDragSY = e.touches[0].clientY - zY;
 }, {passive:true});
 
 zOverlay.addEventListener('touchmove', e => {
   e.preventDefault();
-  zX = e.touches[0].clientX - dragSX;
-  zY = e.touches[0].clientY - dragSY;
+  zX = e.touches[0].clientX - zDragSX;
+  zY = e.touches[0].clientY - zDragSY;
   document.getElementById('zoom-img').style.transform = `translate(${zX}px,${zY}px)`;
 }, {passive:false});
 
 zOverlay.addEventListener('touchend', e => {
-  const dx = e.changedTouches[0].clientX - (dragSX + zX);
-  const dy = e.changedTouches[0].clientY - (dragSY + zY);
-  const now = Date.now();
-  if (now - lastTap < 300 && Math.abs(zX - (e.changedTouches[0].clientX - dragSX)) < 10) {
-    toggleZoom(); lastTap = 0; return;
-  }
-  lastTap = now;
+  const x = e.changedTouches[0].clientX;
+  const y = e.changedTouches[0].clientY;
+  // 드래그 거의 없었으면 더블탭 체크
+  const moved = Math.abs(x - (zDragSX + zX)) < 10 && Math.abs(y - (zDragSY + zY)) < 10;
+  if (moved && checkDoubleTap(x, y)) closeZoom();
 }, {passive:true});
+
+/* ── 키보드 ── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' && !zoomed) go(1);
+  if (e.key === 'ArrowLeft'  && !zoomed) go(-1);
+});
 
 loadAlbum();
 </script>
