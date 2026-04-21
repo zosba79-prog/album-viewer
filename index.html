@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>앨범 뷰어</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;500&family=Noto+Sans+KR:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cream: #F5F0E8;
+    --warm-brown: #5C4A32;
+    --light-brown: #A08060;
+    --gold: #C9A84C;
+    --page-bg: #FAF7F2;
+    --shadow: rgba(80,50,20,0.18);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--cream);
+    font-family: 'Noto Sans KR', sans-serif;
+    color: var(--warm-brown);
+    overflow: hidden;
+  }
+
+  /* ── PASSWORD SCREEN ── */
+  #lock-screen {
+    position: fixed; inset: 0;
+    background: var(--cream);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 0;
+    z-index: 100;
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  #lock-screen.hidden {
+    opacity: 0; transform: scale(1.04); pointer-events: none;
+  }
+
+  .lock-deco {
+    width: 64px; height: 64px; margin-bottom: 2rem;
+    opacity: 0.35;
+  }
+
+  .lock-title {
+    font-family: 'Noto Serif KR', serif;
+    font-size: clamp(22px, 4vw, 30px);
+    font-weight: 300;
+    letter-spacing: 0.08em;
+    color: var(--warm-brown);
+    margin-bottom: 0.4rem;
+    text-align: center;
+  }
+  .lock-sub {
+    font-size: 13px;
+    color: var(--light-brown);
+    margin-bottom: 2.5rem;
+    letter-spacing: 0.05em;
+    text-align: center;
+  }
+
+  .pw-form {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    width: 100%; max-width: 300px;
+  }
+  .pw-form input[type="password"] {
+    width: 100%;
+    padding: 12px 18px;
+    border: 1px solid #D4C4A8;
+    border-radius: 4px;
+    background: #FDFAF5;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 16px;
+    color: var(--warm-brown);
+    text-align: center;
+    letter-spacing: 0.15em;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .pw-form input[type="password"]:focus {
+    border-color: var(--gold);
+  }
+  .pw-form button {
+    width: 100%;
+    padding: 12px;
+    background: var(--warm-brown);
+    color: #FAF7F2;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+  .pw-form button:hover { background: #4A3828; }
+  .pw-form button:active { transform: scale(0.98); }
+  .pw-error {
+    font-size: 12px;
+    color: #B05050;
+    min-height: 18px;
+    letter-spacing: 0.04em;
+  }
+
+  .lock-footer {
+    position: fixed; bottom: 2rem;
+    font-size: 11px; color: #C0B09A;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── ALBUM SCREEN ── */
+  #album-screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.6s ease 0.3s;
+  }
+  #album-screen.visible {
+    opacity: 1; pointer-events: all;
+  }
+
+  .album-header {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 1.2rem 1.5rem;
+    z-index: 10;
+  }
+  .album-name {
+    font-family: 'Noto Serif KR', serif;
+    font-size: 14px;
+    font-weight: 300;
+    letter-spacing: 0.14em;
+    color: var(--light-brown);
+  }
+
+  /* ── BOOK ── */
+  .book-wrap {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 2rem;
+    width: 100%; padding: 0 1rem;
+  }
+
+  .book {
+    display: flex;
+    align-items: stretch;
+    border-radius: 3px;
+    overflow: hidden;
+    box-shadow:
+      -6px 6px 20px var(--shadow),
+      6px 6px 20px var(--shadow),
+      0 2px 6px rgba(0,0,0,0.12);
+    max-width: min(88vw, 760px);
+    width: 100%;
+    transition: opacity 0.25s ease;
+    position: relative;
+  }
+  .book.turning { opacity: 0; transform: scaleX(0.97); }
+  .book { transition: opacity 0.22s ease, transform 0.22s ease; }
+
+  .book-page {
+    flex: 1;
+    background: var(--page-bg);
+    position: relative;
+    overflow: hidden;
+  }
+  .book-page img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .book-page.loading {
+    display: flex; align-items: center; justify-content: center;
+  }
+  .book-page.loading::after {
+    content: '';
+    width: 28px; height: 28px;
+    border: 2px solid #D4C4A8;
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* cover page highlight */
+  .book-page::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.07) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .book-spine {
+    width: 5px;
+    background: linear-gradient(to right,
+      #8A6A40 0%, #C9A070 30%, #B08050 50%, #8A6A40 100%);
+    flex-shrink: 0;
+    box-shadow: inset -1px 0 2px rgba(0,0,0,0.2), inset 1px 0 2px rgba(255,255,255,0.1);
+  }
+  .book-spine.hidden { display: none; }
+
+  /* cover decoration */
+  .cover-label {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: linear-gradient(160deg, #E8DDD0 0%, #D4C4A8 100%);
+  }
+  .cover-label .cover-emoji { font-size: 40px; margin-bottom: 1rem; }
+  .cover-label .cover-name {
+    font-family: 'Noto Serif KR', serif;
+    font-size: clamp(16px, 3vw, 22px);
+    font-weight: 300;
+    letter-spacing: 0.15em;
+    color: var(--warm-brown);
+    margin-bottom: 0.4rem;
+  }
+  .cover-label .cover-date {
+    font-size: 12px; color: var(--light-brown); letter-spacing: 0.12em;
+  }
+
+  /* ── CONTROLS ── */
+  .controls {
+    display: flex; align-items: center; gap: 1.5rem;
+  }
+  .ctrl-btn {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 1px solid #D4C4A8;
+    background: rgba(255,255,255,0.7);
+    color: var(--warm-brown);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    backdrop-filter: blur(4px);
+  }
+  .ctrl-btn:hover:not(:disabled) { background: rgba(255,255,255,0.95); border-color: var(--gold); }
+  .ctrl-btn:active:not(:disabled) { transform: scale(0.95); }
+  .ctrl-btn:disabled { opacity: 0.25; cursor: default; }
+  .page-counter {
+    font-size: 13px; color: var(--light-brown);
+    letter-spacing: 0.1em;
+    min-width: 70px; text-align: center;
+  }
+
+  /* keyboard hint */
+  .kb-hint {
+    position: fixed; bottom: 1.5rem;
+    font-size: 11px; color: #C0B09A;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 500px) {
+    .book { border-radius: 2px; }
+    .book-spine { width: 3px; }
+    .ctrl-btn { width: 38px; height: 38px; font-size: 17px; }
+  }
+
+  /* aspect ratio for spread */
+  .book { aspect-ratio: 2 / 1; }
+  @media (max-width: 500px) { .book { aspect-ratio: 3 / 2; } }
+</style>
+</head>
+<body>
+
+<!-- ── PASSWORD SCREEN ── -->
+<div id="lock-screen">
+  <svg class="lock-deco" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="28" width="40" height="28" rx="3" stroke="#5C4A32" stroke-width="2"/>
+    <path d="M20 28V20C20 13.37 25.37 8 32 8C38.63 8 44 13.37 44 20V28" stroke="#5C4A32" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="32" cy="42" r="4" fill="#5C4A32" opacity="0.5"/>
+    <line x1="32" y1="46" x2="32" y2="51" stroke="#5C4A32" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  </svg>
+
+  <div class="lock-title" id="lock-title">소중한 앨범</div>
+  <div class="lock-sub" id="lock-sub">비밀번호를 입력해 주세요</div>
+
+  <div class="pw-form">
+    <input type="password" id="pw-input" placeholder="••••••" autocomplete="off" />
+    <button onclick="checkPassword()">열기</button>
+    <div class="pw-error" id="pw-error"></div>
+  </div>
+
+  <div class="lock-footer">개인 보호를 위해 비밀번호로 잠겨 있습니다</div>
+</div>
+
+<!-- ── ALBUM SCREEN ── -->
+<div id="album-screen">
+  <div class="album-header">
+    <div class="album-name" id="album-name"></div>
+  </div>
+
+  <div class="book-wrap">
+    <div class="book" id="book">
+      <div class="book-page loading" id="page-left"></div>
+      <div class="book-spine" id="spine"></div>
+      <div class="book-page loading" id="page-right"></div>
+    </div>
+
+    <div class="controls">
+      <button class="ctrl-btn" id="btn-prev" onclick="go(-1)" disabled>&#8249;</button>
+      <div class="page-counter" id="counter">1 / 1</div>
+      <button class="ctrl-btn" id="btn-next" onclick="go(1)">&#8250;</button>
+    </div>
+  </div>
+
+  <div class="kb-hint">← → 키로도 넘길 수 있어요</div>
+</div>
+
+<script>
+/* ──────────────────────────────────────────
+   CONFIG — config.js 에서 override 됩니다
+────────────────────────────────────────── */
+window.ALBUM_CONFIG = window.ALBUM_CONFIG || {
+  title: "앨범",
+  subtitle: "비밀번호를 입력해 주세요",
+  password: "1234",
+  driveFolderId: "",
+  apiKey: "",
+  // 직접 이미지 URL 목록 (드라이브 대신 사용할 때)
+  images: []
+};
+
+/* ──────────────────────────────────────────
+   PASSWORD
+────────────────────────────────────────── */
+function init() {
+  const c = window.ALBUM_CONFIG;
+  document.getElementById('lock-title').textContent = c.title || '소중한 앨범';
+  document.getElementById('lock-sub').textContent = c.subtitle || '비밀번호를 입력해 주세요';
+  document.getElementById('album-name').textContent = c.title || '';
+  document.getElementById('pw-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') checkPassword();
+  });
+}
+
+function checkPassword() {
+  const val = document.getElementById('pw-input').value;
+  const err = document.getElementById('pw-error');
+  if (val === window.ALBUM_CONFIG.password) {
+    err.textContent = '';
+    document.getElementById('lock-screen').classList.add('hidden');
+    document.getElementById('album-screen').classList.add('visible');
+    loadAlbum();
+  } else {
+    err.textContent = '비밀번호가 맞지 않습니다';
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-input').focus();
+  }
+}
+
+/* ──────────────────────────────────────────
+   ALBUM LOGIC
+────────────────────────────────────────── */
+let spreads = []; // [{type:'single'|'spread', left: url, right: url|null}]
+let cur = 0;
+
+async function loadAlbum() {
+  const c = window.ALBUM_CONFIG;
+  let imgs = [];
+
+  if (c.images && c.images.length > 0) {
+    imgs = c.images;
+  } else if (c.driveFolderId && c.apiKey) {
+    imgs = await fetchDrive(c.driveFolderId, c.apiKey);
+  } else {
+    // 데모 플레이스홀더
+    imgs = buildDemo();
+  }
+
+  spreads = buildSpreads(imgs);
+  cur = 0;
+  render();
+}
+
+/* Google Drive 파일 목록 fetch */
+async function fetchDrive(folderId, apiKey) {
+  try {
+    const url = `https://www.googleapis.com/drive/v3/files`
+      + `?q='${folderId}'+in+parents+and+(mimeType+contains+'image/')`
+      + `&fields=files(id,name)&orderBy=name&pageSize=200&key=${apiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.files) return buildDemo();
+    return data.files.map(f => ({
+      name: f.name,
+      url: `https://drive.google.com/thumbnail?id=${f.id}&sz=w1600`
+    }));
+  } catch(e) {
+    return buildDemo();
+  }
+}
+
+/* 파일 목록 → 스프레드 배열 변환
+   규칙: 파일명이 2자리(01, 30 등) → 단독 페이지
+         파일명이 4자리(0203, 1516 등) → 펼침 페이지 */
+function buildSpreads(imgs) {
+  // 이름 오름차순 정렬
+  imgs.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+
+  return imgs.map(img => {
+    const base = img.name.replace(/\.[^.]+$/, ''); // 확장자 제거
+    if (base.length <= 2) {
+      return { type: 'single', left: img.url, right: null, label: base };
+    } else {
+      return { type: 'spread', left: img.url, right: null, label: base };
+      // spread 이미지는 하나의 파일에 두 페이지가 담겨 있음
+    }
+  });
+}
+
+/* 데모용 플레이스홀더 */
+function buildDemo() {
+  const colors = ['#C9B99A','#A8BCC9','#B9C9A8','#C9A8A8','#A8C9C9','#C9C9A8','#B8A8C9'];
+  const files = ['01','0203','0405','0607','0809','1011','1213','1415','30'];
+  return files.map((n, i) => ({
+    name: n + '.jpg',
+    url: null,
+    demoColor: colors[i % colors.length],
+    demoLabel: n
+  }));
+}
+
+/* ── RENDER ── */
+function render() {
+  const s = spreads[cur];
+  const book = document.getElementById('book');
+  const left = document.getElementById('page-left');
+  const right = document.getElementById('page-right');
+  const spine = document.getElementById('spine');
+
+  // counter
+  document.getElementById('counter').textContent = `${cur + 1} / ${spreads.length}`;
+  document.getElementById('btn-prev').disabled = cur === 0;
+  document.getElementById('btn-next').disabled = cur === spreads.length - 1;
+
+  if (s.type === 'single') {
+    spine.classList.add('hidden');
+    right.style.display = 'none';
+    left.style.flex = '1';
+    setPage(left, s);
+    // 책 비율 조정 (단독 페이지는 절반 너비처럼)
+    book.style.maxWidth = 'min(44vw, 380px)';
+  } else {
+    spine.classList.remove('hidden');
+    right.style.display = 'block';
+    left.style.flex = '1';
+    setPage(left, s); // 한 장에 두 페이지 담긴 이미지를 왼쪽에 꽉 채움
+    right.innerHTML = ''; // spread는 single image
+    book.style.maxWidth = 'min(88vw, 760px)';
+  }
+}
+
+function setPage(el, spread) {
+  el.className = 'book-page';
+  if (spread.url) {
+    const img = document.createElement('img');
+    img.src = spread.url;
+    img.alt = spread.label || '';
+    img.onload = () => { el.classList.remove('loading'); };
+    el.classList.add('loading');
+    el.innerHTML = '';
+    el.appendChild(img);
+  } else {
+    // 데모 플레이스홀더
+    el.innerHTML = `
+      <div class="cover-label" style="background: linear-gradient(160deg, ${spread.demoColor}33, ${spread.demoColor}66);">
+        <div class="cover-emoji">📸</div>
+        <div class="cover-name">${spread.demoLabel || ''}</div>
+        <div class="cover-date">config.js에서 드라이브 연결</div>
+      </div>`;
+  }
+}
+
+/* ── NAVIGATION ── */
+function go(dir) {
+  const next = cur + dir;
+  if (next < 0 || next >= spreads.length) return;
+  const book = document.getElementById('book');
+  book.classList.add('turning');
+  setTimeout(() => {
+    cur = next;
+    render();
+    book.classList.remove('turning');
+  }, 220);
+}
+
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('album-screen').classList.contains('visible')) return;
+  if (e.key === 'ArrowRight') go(1);
+  if (e.key === 'ArrowLeft') go(-1);
+});
+
+/* ── TOUCH SWIPE ── */
+let touchStartX = 0;
+document.getElementById('book') && document.getElementById('book').addEventListener('touchstart', e => {
+  touchStartX = e.touches[0].clientX;
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  if (!document.getElementById('album-screen').classList.contains('visible')) return;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+}, { passive: true });
+
+init();
+</script>
+</body>
+</html>
