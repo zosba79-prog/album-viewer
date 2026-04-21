@@ -5,38 +5,67 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>앨범 뷰어</title>
 <script src="apikey.js?v=20260421"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
   :root { --cream:#F5F0E8; --brown:#5C4A32; --light:#A08060; --gold:#C9A84C; --shadow:rgba(80,50,20,0.18); }
-  html, body { height:100%; width:100%; background:var(--cream); font-family:'Noto Sans KR',sans-serif; color:var(--brown); overflow:hidden; touch-action:none; }
+
+  html { background:#000; }
+  body {
+    height: 100dvh; width: 100dvw;
+    background: var(--cream);
+    font-family: 'Noto Sans KR', sans-serif;
+    color: var(--brown);
+    overflow: hidden;
+    touch-action: none;
+  }
+
+  /* 가로 모드일 때 body도 검정 → 검은 바와 구분 안 되게 */
+  @media (orientation:landscape) and (max-width:900px) {
+    body { background: #000; }
+  }
 
   #album-screen {
-    position:fixed; inset:0;
-    display:flex; flex-direction:column;
-    align-items:center; justify-content:center;
-    gap:1.2rem; padding:8px;
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1.2rem; padding: 8px;
+    background: var(--cream);
   }
-  .book {
-    border-radius:3px; overflow:hidden;
-    box-shadow:-6px 6px 20px var(--shadow),6px 6px 20px var(--shadow),0 2px 6px rgba(0,0,0,0.12);
-    transition:opacity 0.22s ease;
-    position:relative; flex-shrink:0;
-  }
-  .book.turning { opacity:0; }
-  .book.single { width:min(55vw,calc(70vh * 14/11)); height:min(calc(55vw * 11/14),70vh); }
-  .book.spread { width:min(92vw,calc(70vh * 28/11)); height:min(calc(92vw * 11/28),70vh); }
 
-  @media (max-width:900px) and (orientation:landscape) {
-    #album-screen { gap:0.4rem; padding:2px; }
-    .book.single { width:min(44vw,calc(88vh * 14/11)); height:min(calc(44vw * 11/14),88vh); }
-    .book.spread { width:min(99vw,calc(88vh * 28/11)); height:min(calc(99vw * 11/28),88vh); }
-    .ctrl-btn { width:32px; height:32px; font-size:16px; }
-    .page-counter { font-size:11px; min-width:50px; }
-    .kb-hint { display:none; }
+  /* 가로 모드: 앨범이 화면을 꽉 채우도록, 배경도 어둡게 */
+  @media (orientation:landscape) and (max-width:900px) {
+    #album-screen {
+      background: #111;
+      gap: 0.3rem;
+      padding: 2px;
+    }
+    .page-counter { color: #aaa; }
+    .ctrl-btn { background: rgba(80,80,80,0.7); border-color: #555; color: #eee; }
+    .kb-hint { display: none; }
+  }
+
+  .book {
+    border-radius: 3px; overflow: hidden;
+    box-shadow: -6px 6px 20px var(--shadow), 6px 6px 20px var(--shadow), 0 2px 6px rgba(0,0,0,0.12);
+    transition: opacity 0.22s ease;
+    position: relative; flex-shrink: 0;
+  }
+  .book.turning { opacity: 0; }
+
+  /* 세로 모드 */
+  .book.single { width: min(55vw, calc(70vh * 14/11)); height: min(calc(55vw * 11/14), 70vh); }
+  .book.spread { width: min(92vw, calc(70vh * 28/11)); height: min(calc(92vw * 11/28), 70vh); }
+
+  /* 가로 모드 (모바일): 화면 꽉 채움 */
+  @media (orientation:landscape) and (max-width:900px) {
+    .book.single { width: min(46vw, calc(92vh * 14/11)); height: min(calc(46vw * 11/14), 92vh); }
+    .book.spread { width: min(99vw, calc(92vh * 28/11)); height: min(calc(99vw * 11/28), 92vh); }
+    .ctrl-btn { width: 32px; height: 32px; font-size: 15px; }
+    .page-counter { font-size: 11px; min-width: 50px; }
   }
 
   .book img { width:100%; height:100%; object-fit:cover; display:block; }
@@ -49,24 +78,24 @@
   .book .loading-spinner::after { content:''; width:28px; height:28px; border:2px solid #D4C4A8; border-top-color:var(--gold); border-radius:50%; animation:spin 0.8s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
 
-  /* 모바일 확대 오버레이 */
+  /* 확대 오버레이 (모바일 전용) */
   #zoom-overlay {
-    display:none; position:fixed; inset:0;
-    background:rgba(0,0,0,0.88);
-    z-index:100; touch-action:none;
-    overflow:hidden;
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.9);
+    z-index: 100; overflow: hidden;
+    touch-action: none;
   }
-  #zoom-overlay.active { display:block; }
+  #zoom-overlay.active { display: block; }
   #zoom-img {
-    position:absolute;
-    touch-action:none;
-    user-select:none;
-    -webkit-user-drag:none;
-    object-fit:contain;
+    position: absolute;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    object-fit: contain;
   }
-  /* PC에서는 확대 완전 비활성 */
+  /* PC: 확대 없음 */
   @media (hover:hover) and (pointer:fine) {
-    #zoom-overlay { display:none !important; }
+    #zoom-overlay { display: none !important; }
   }
 
   .controls { display:flex; align-items:center; gap:1.5rem; }
@@ -75,7 +104,7 @@
     border:1px solid #D4C4A8; background:rgba(255,255,255,0.7);
     color:var(--brown); font-size:20px; cursor:pointer;
     display:flex; align-items:center; justify-content:center;
-    transition:background 0.15s,border-color 0.15s,transform 0.1s;
+    transition:background 0.15s, border-color 0.15s, transform 0.1s;
     -webkit-tap-highlight-color:transparent;
   }
   .ctrl-btn:hover:not(:disabled) { background:rgba(255,255,255,0.95); border-color:var(--gold); }
@@ -113,24 +142,7 @@ const isMobile = !window.matchMedia('(hover:hover) and (pointer:fine)').matches;
 let pages = [], cur = 0;
 const cache = {};
 let zoomed = false;
-let lastTapTime = 0;
-let lastTapX = 0, lastTapY = 0;
-
-/* ── 가로 모드 전체화면 (모바일만) ── */
-function handleOrientation() {
-  if (!isMobile) return;
-  const isLandscape = window.innerWidth > window.innerHeight;
-  const el = document.documentElement;
-  if (isLandscape && !document.fullscreenElement) {
-    const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-    if (fn) fn.call(el).catch(()=>{});
-  } else if (!isLandscape && document.fullscreenElement) {
-    const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
-    if (fn) fn.call(document).catch(()=>{});
-  }
-}
-window.addEventListener('orientationchange', () => setTimeout(handleOrientation, 400));
-window.addEventListener('resize', () => setTimeout(handleOrientation, 400));
+let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
 
 /* ── 프리로드 ── */
 function preload(idx) {
@@ -203,18 +215,17 @@ function go(dir) {
   setTimeout(() => { cur = next; render(); book.classList.remove('turning'); }, 200);
 }
 
-/* ── 더블탭 감지 공통 함수 ── */
-function checkDoubleTap(x, y) {
+/* ── 더블탭 감지 ── */
+function isDoubleTap(x, y) {
   const now = Date.now();
-  const dx = Math.abs(x - lastTapX);
-  const dy = Math.abs(y - lastTapY);
-  const isDouble = (now - lastTapTime < 300) && dx < 30 && dy < 30;
-  lastTapTime = now;
-  lastTapX = x; lastTapY = y;
-  return isDouble;
+  const gap = now - lastTapTime;
+  const dist = Math.hypot(x - lastTapX, y - lastTapY);
+  const yes = gap < 300 && dist < 30;
+  lastTapTime = now; lastTapX = x; lastTapY = y;
+  return yes;
 }
 
-/* ── 앨범 화면 터치 (스와이프 + 더블탭 확대) ── */
+/* ── 앨범 화면 터치 ── */
 let swipeSX = 0, swipeSY = 0;
 
 document.getElementById('album-screen').addEventListener('touchstart', e => {
@@ -227,15 +238,15 @@ document.getElementById('album-screen').addEventListener('touchend', e => {
   const y = e.changedTouches[0].clientY;
   const dx = x - swipeSX;
   const dy = y - swipeSY;
+  const moved = Math.abs(dx) > 10 || Math.abs(dy) > 10;
 
-  if (checkDoubleTap(x, y) && isMobile) {
-    openZoom(); return;
-  }
+  if (!moved && isDoubleTap(x, y) && isMobile) { openZoom(); return; }
   if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1);
 }, {passive:true});
 
 /* ── 확대 오버레이 ── */
 let zX = 0, zY = 0, zDragSX = 0, zDragSY = 0;
+let zoomTouchStartX = 0, zoomTouchStartY = 0;
 
 function openZoom() {
   zoomed = true;
@@ -243,14 +254,13 @@ function openZoom() {
   const zImg = document.getElementById('zoom-img');
   zX = 0; zY = 0;
   zImg.src = pages[cur].url;
-  // 화면 꽉 차게: 가로 100vw, 세로 100vh, object-fit contain으로 비율 유지
   zImg.style.width  = window.innerWidth + 'px';
   zImg.style.height = window.innerHeight + 'px';
-  zImg.style.left   = '0px';
-  zImg.style.top    = '0px';
-  zImg.style.transform = 'translate(0px, 0px)';
+  zImg.style.left = '0px';
+  zImg.style.top  = '0px';
+  zImg.style.transform = 'translate(0px,0px)';
   overlay.classList.add('active');
-  // 더블탭 타이머 리셋 (openZoom 직후 바로 닫히지 않게)
+  // 타이머 리셋: 확대 직후 더블탭으로 오해 방지
   lastTapTime = 0;
 }
 
@@ -260,10 +270,11 @@ function closeZoom() {
   lastTapTime = 0;
 }
 
-/* 오버레이 터치: 더블탭 닫기 + 드래그 이동 */
 const zOverlay = document.getElementById('zoom-overlay');
 
 zOverlay.addEventListener('touchstart', e => {
+  zoomTouchStartX = e.touches[0].clientX;
+  zoomTouchStartY = e.touches[0].clientY;
   zDragSX = e.touches[0].clientX - zX;
   zDragSY = e.touches[0].clientY - zY;
 }, {passive:true});
@@ -278,9 +289,9 @@ zOverlay.addEventListener('touchmove', e => {
 zOverlay.addEventListener('touchend', e => {
   const x = e.changedTouches[0].clientX;
   const y = e.changedTouches[0].clientY;
-  // 드래그 거의 없었으면 더블탭 체크
-  const moved = Math.abs(x - (zDragSX + zX)) < 10 && Math.abs(y - (zDragSY + zY)) < 10;
-  if (moved && checkDoubleTap(x, y)) closeZoom();
+  const moved = Math.abs(x - zoomTouchStartX) > 10 || Math.abs(y - zoomTouchStartY) > 10;
+  // 드래그 없이 탭했을 때만 더블탭 체크
+  if (!moved && isDoubleTap(x, y)) closeZoom();
 }, {passive:true});
 
 /* ── 키보드 ── */
