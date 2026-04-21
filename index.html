@@ -26,21 +26,20 @@
     box-shadow:-6px 6px 20px var(--shadow),6px 6px 20px var(--shadow),0 2px 6px rgba(0,0,0,0.12);
     transition:opacity 0.22s ease;
     position:relative; flex-shrink:0;
-    transform-origin: center center;
   }
   .book.turning { opacity:0; }
+  /* 세로 모드 / PC */
   .book.single { width:min(55vw,calc(70vh * 14/11)); height:min(calc(55vw * 11/14),70vh); }
   .book.spread { width:min(92vw,calc(70vh * 28/11)); height:min(calc(92vw * 11/28),70vh); }
 
-  /* 가로 모드 - 버튼 포함해서 꽉 차게 */
-  @media (orientation:landscape) {
-    #album-screen { gap:0.5rem; padding:4px; }
-    .book.single { width:min(46vw,calc(86vh * 14/11)); height:min(calc(46vw * 11/14),86vh); }
-    .book.spread { width:min(98vw,calc(86vh * 28/11)); height:min(calc(98vw * 11/28),86vh); }
-    .controls { gap:1rem; }
+  /* 모바일 가로 모드: 버튼 포함해서 꽉 차게 */
+  @media (max-width:900px) and (orientation:landscape) {
+    #album-screen { gap:0.4rem; padding:2px; }
+    .book.single { width:min(44vw,calc(88vh * 14/11)); height:min(calc(44vw * 11/14),88vh); }
+    .book.spread { width:min(99vw,calc(88vh * 28/11)); height:min(calc(99vw * 11/28),88vh); }
+    .ctrl-btn { width:32px; height:32px; font-size:16px; }
+    .page-counter { font-size:11px; min-width:50px; }
     .kb-hint { display:none; }
-    .ctrl-btn { width:36px; height:36px; font-size:17px; }
-    .page-counter { font-size:12px; }
   }
 
   .book img { width:100%; height:100%; object-fit:cover; display:block; }
@@ -52,29 +51,6 @@
   .book .loading-spinner { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#FAF7F2; }
   .book .loading-spinner::after { content:''; width:28px; height:28px; border:2px solid #D4C4A8; border-top-color:var(--gold); border-radius:50%; animation:spin 0.8s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
-
-  /* 확대 오버레이 */
-  #zoom-overlay {
-    display:none; position:fixed; inset:0;
-    background:rgba(0,0,0,0.85);
-    z-index:100; overflow:hidden;
-    touch-action:none;
-  }
-  #zoom-overlay.active { display:flex; align-items:center; justify-content:center; }
-  #zoom-img {
-    position:absolute;
-    transform-origin:center center;
-    max-width:none; max-height:none;
-    touch-action:none;
-    transition:none;
-  }
-  #zoom-close {
-    position:fixed; top:16px; right:16px; z-index:200;
-    width:36px; height:36px; border-radius:50%;
-    background:rgba(255,255,255,0.2); border:none;
-    color:#fff; font-size:20px; cursor:pointer;
-    display:flex; align-items:center; justify-content:center;
-  }
 
   .controls { display:flex; align-items:center; gap:1.5rem; }
   .ctrl-btn {
@@ -91,6 +67,36 @@
   .page-counter { font-size:13px; color:var(--light); letter-spacing:0.1em; min-width:70px; text-align:center; }
   .kb-hint { font-size:11px; color:#C0B09A; letter-spacing:0.06em; }
   .err { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--light); text-align:center; line-height:1.8; white-space:pre-line; padding:2rem; }
+
+  /* 모바일 전용 확대 오버레이 */
+  #zoom-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,0.9);
+    z-index:100;
+    touch-action:none;
+    align-items:center; justify-content:center;
+  }
+  #zoom-overlay.active { display:flex; }
+  #zoom-img {
+    position:absolute;
+    transform-origin:center center;
+    touch-action:none;
+    user-select:none;
+    -webkit-user-drag:none;
+  }
+  #zoom-close {
+    position:fixed; top:16px; right:16px; z-index:200;
+    width:40px; height:40px; border-radius:50%;
+    background:rgba(255,255,255,0.25); border:none;
+    color:#fff; font-size:22px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  /* PC에서는 오버레이 완전 숨김 */
+  @media (hover:hover) and (pointer:fine) {
+    #zoom-overlay { display:none !important; }
+  }
 </style>
 </head>
 <body>
@@ -107,37 +113,36 @@
   <div class="kb-hint">← → 키 또는 스와이프로 넘길 수 있어요</div>
 </div>
 
-<!-- 확대 오버레이 -->
+<!-- 모바일 확대 오버레이 -->
 <div id="zoom-overlay">
   <button id="zoom-close" onclick="closeZoom()">✕</button>
-  <img id="zoom-img" />
+  <img id="zoom-img" draggable="false" />
 </div>
 
 <script>
 const params  = new URLSearchParams(location.search);
 const FOLDER  = params.get('folder') || '';
 const API_KEY = window.GAPI_KEY || '';
+const isMobile = !window.matchMedia('(hover:hover) and (pointer:fine)').matches;
 
 let pages = [], cur = 0;
 const cache = {};
 
-/* ── 가로 모드 → 자동 전체화면 ── */
-function tryFullscreen() {
-  const el = document.documentElement;
-  if (window.innerWidth > window.innerHeight) {
-    // 가로 모드
-    if (!document.fullscreenElement) {
-      (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen || (()=>{})).call(el);
-    }
-  } else {
-    // 세로 모드 → 전체화면 해제
-    if (document.fullscreenElement) {
-      (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen || (()=>{})).call(document);
-    }
+/* ── 가로 모드 전체화면 (모바일만) ── */
+function handleOrientation() {
+  if (!isMobile) return;
+  const isLandscape = window.innerWidth > window.innerHeight;
+  if (isLandscape && !document.fullscreenElement) {
+    const el = document.documentElement;
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (fn) fn.call(el).catch(()=>{});
+  } else if (!isLandscape && document.fullscreenElement) {
+    const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    if (fn) fn.call(document).catch(()=>{});
   }
 }
-window.addEventListener('orientationchange', () => setTimeout(tryFullscreen, 300));
-screen.orientation && screen.orientation.addEventListener('change', () => setTimeout(tryFullscreen, 300));
+window.addEventListener('orientationchange', () => setTimeout(handleOrientation, 400));
+window.addEventListener('resize', () => setTimeout(handleOrientation, 400));
 
 /* ── 프리로드 ── */
 function preload(idx) {
@@ -195,8 +200,8 @@ function render() {
 }
 
 function showImg(book, img, type) {
-  img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in;';
-  img.addEventListener('click', () => openZoom(img.src));
+  img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+  if (isMobile) img.style.cursor = 'zoom-in';
   book.innerHTML = '';
   book.appendChild(img);
   if (type === 'spread') {
@@ -212,37 +217,48 @@ function go(dir) {
   setTimeout(() => { cur = next; render(); book.classList.remove('turning'); }, 200);
 }
 
-/* ── 키보드 / 스와이프 ── */
+/* ── 키보드 ── */
 document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') go(1);
   if (e.key === 'ArrowLeft')  go(-1);
   if (e.key === 'Escape') closeZoom();
 });
+
+/* ── 터치: 스와이프 + 더블탭 확대 ── */
 let tx = 0, ty = 0, lastTap = 0;
-document.addEventListener('touchstart', e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, {passive:true});
+document.addEventListener('touchstart', e => {
+  if (document.getElementById('zoom-overlay').classList.contains('active')) return;
+  tx = e.touches[0].clientX;
+  ty = e.touches[0].clientY;
+}, {passive:true});
+
 document.addEventListener('touchend', e => {
   if (document.getElementById('zoom-overlay').classList.contains('active')) return;
   const dx = e.changedTouches[0].clientX - tx;
   const dy = e.changedTouches[0].clientY - ty;
   const now = Date.now();
+  // 더블탭
   if (now - lastTap < 300 && Math.abs(dx) < 20 && Math.abs(dy) < 20) {
-    openZoom(pages[cur].url); lastTap = 0; return;
+    if (isMobile) openZoom(pages[cur].url);
+    lastTap = 0; return;
   }
   lastTap = now;
+  // 스와이프
   if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1);
 }, {passive:true});
 
-/* ── 확대 오버레이 (드래그 이동) ── */
-let zoomScale = 2.5;
-let zoomX = 0, zoomY = 0;
-let dragStartX = 0, dragStartY = 0, isDragging = false;
+/* ── 확대 오버레이 (모바일 터치 드래그) ── */
+let zX = 0, zY = 0;
+let dragSX = 0, dragSY = 0;
 
 function openZoom(src) {
   const overlay = document.getElementById('zoom-overlay');
   const img = document.getElementById('zoom-img');
-  zoomX = 0; zoomY = 0; zoomScale = 2.5;
+  zX = 0; zY = 0;
   img.src = src;
-  applyZoomTransform();
+  img.style.width = '250%';
+  img.style.height = 'auto';
+  applyTransform();
   overlay.classList.add('active');
 }
 
@@ -250,43 +266,28 @@ function closeZoom() {
   document.getElementById('zoom-overlay').classList.remove('active');
 }
 
-function applyZoomTransform() {
-  document.getElementById('zoom-img').style.transform = `translate(${zoomX}px, ${zoomY}px) scale(${zoomScale})`;
+function applyTransform() {
+  document.getElementById('zoom-img').style.transform = `translate(${zX}px, ${zY}px)`;
 }
 
-/* 마우스 드래그 */
-const overlay = document.getElementById('zoom-overlay');
-overlay.addEventListener('mousedown', e => {
-  if (e.target === document.getElementById('zoom-close')) return;
-  isDragging = true; dragStartX = e.clientX - zoomX; dragStartY = e.clientY - zoomY;
-  overlay.style.cursor = 'grabbing';
-});
-window.addEventListener('mousemove', e => {
-  if (!isDragging) return;
-  zoomX = e.clientX - dragStartX; zoomY = e.clientY - dragStartY;
-  applyZoomTransform();
-});
-window.addEventListener('mouseup', () => { isDragging = false; overlay.style.cursor = ''; });
-
 /* 터치 드래그 */
-let touchDragStartX = 0, touchDragStartY = 0;
-overlay.addEventListener('touchstart', e => {
-  if (e.touches.length === 1) {
-    touchDragStartX = e.touches[0].clientX - zoomX;
-    touchDragStartY = e.touches[0].clientY - zoomY;
-  }
+const zOverlay = document.getElementById('zoom-overlay');
+zOverlay.addEventListener('touchstart', e => {
+  if (e.target.id === 'zoom-close') return;
+  dragSX = e.touches[0].clientX - zX;
+  dragSY = e.touches[0].clientY - zY;
 }, {passive:true});
-overlay.addEventListener('touchmove', e => {
+
+zOverlay.addEventListener('touchmove', e => {
   e.preventDefault();
-  if (e.touches.length === 1) {
-    zoomX = e.touches[0].clientX - touchDragStartX;
-    zoomY = e.touches[0].clientY - touchDragStartY;
-    applyZoomTransform();
-  }
+  if (e.target.id === 'zoom-close') return;
+  zX = e.touches[0].clientX - dragSX;
+  zY = e.touches[0].clientY - dragSY;
+  applyTransform();
 }, {passive:false});
 
-/* 오버레이 배경 클릭 시 닫기 */
-overlay.addEventListener('click', e => { if (e.target === overlay) closeZoom(); });
+/* 배경 탭으로 닫기 */
+zOverlay.addEventListener('click', e => { if (e.target === zOverlay) closeZoom(); });
 
 loadAlbum();
 </script>
