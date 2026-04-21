@@ -20,7 +20,6 @@
     align-items:center; justify-content:center;
     gap:1.2rem; padding:8px;
   }
-
   .book {
     border-radius:3px; overflow:hidden;
     box-shadow:-6px 6px 20px var(--shadow),6px 6px 20px var(--shadow),0 2px 6px rgba(0,0,0,0.12);
@@ -28,11 +27,10 @@
     position:relative; flex-shrink:0;
   }
   .book.turning { opacity:0; }
-  /* 세로 모드 / PC */
   .book.single { width:min(55vw,calc(70vh * 14/11)); height:min(calc(55vw * 11/14),70vh); }
   .book.spread { width:min(92vw,calc(70vh * 28/11)); height:min(calc(92vw * 11/28),70vh); }
 
-  /* 모바일 가로 모드: 버튼 포함해서 꽉 차게 */
+  /* 모바일 가로 모드 */
   @media (max-width:900px) and (orientation:landscape) {
     #album-screen { gap:0.4rem; padding:2px; }
     .book.single { width:min(44vw,calc(88vh * 14/11)); height:min(calc(44vw * 11/14),88vh); }
@@ -52,6 +50,27 @@
   .book .loading-spinner::after { content:''; width:28px; height:28px; border:2px solid #D4C4A8; border-top-color:var(--gold); border-radius:50%; animation:spin 0.8s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
 
+  /* 모바일 확대 오버레이 */
+  #zoom-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,0.88);
+    z-index:100; touch-action:none;
+    align-items:center; justify-content:center;
+  }
+  #zoom-overlay.active { display:flex; }
+  #zoom-img {
+    position:absolute;
+    transform-origin:center center;
+    touch-action:none;
+    user-select:none;
+    -webkit-user-drag:none;
+    max-width:none; max-height:none;
+  }
+  /* PC에서는 확대 완전 비활성 */
+  @media (hover:hover) and (pointer:fine) {
+    #zoom-overlay { display:none !important; }
+  }
+
   .controls { display:flex; align-items:center; gap:1.5rem; }
   .ctrl-btn {
     width:44px; height:44px; border-radius:50%;
@@ -67,36 +86,6 @@
   .page-counter { font-size:13px; color:var(--light); letter-spacing:0.1em; min-width:70px; text-align:center; }
   .kb-hint { font-size:11px; color:#C0B09A; letter-spacing:0.06em; }
   .err { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--light); text-align:center; line-height:1.8; white-space:pre-line; padding:2rem; }
-
-  /* 모바일 전용 확대 오버레이 */
-  #zoom-overlay {
-    display:none; position:fixed; inset:0;
-    background:rgba(0,0,0,0.9);
-    z-index:100;
-    touch-action:none;
-    align-items:center; justify-content:center;
-  }
-  #zoom-overlay.active { display:flex; }
-  #zoom-img {
-    position:absolute;
-    transform-origin:center center;
-    touch-action:none;
-    user-select:none;
-    -webkit-user-drag:none;
-  }
-  #zoom-close {
-    position:fixed; top:16px; right:16px; z-index:200;
-    width:40px; height:40px; border-radius:50%;
-    background:rgba(255,255,255,0.25); border:none;
-    color:#fff; font-size:22px; cursor:pointer;
-    display:flex; align-items:center; justify-content:center;
-    -webkit-tap-highlight-color:transparent;
-  }
-
-  /* PC에서는 오버레이 완전 숨김 */
-  @media (hover:hover) and (pointer:fine) {
-    #zoom-overlay { display:none !important; }
-  }
 </style>
 </head>
 <body>
@@ -113,9 +102,7 @@
   <div class="kb-hint">← → 키 또는 스와이프로 넘길 수 있어요</div>
 </div>
 
-<!-- 모바일 확대 오버레이 -->
 <div id="zoom-overlay">
-  <button id="zoom-close" onclick="closeZoom()">✕</button>
   <img id="zoom-img" draggable="false" />
 </div>
 
@@ -132,8 +119,8 @@ const cache = {};
 function handleOrientation() {
   if (!isMobile) return;
   const isLandscape = window.innerWidth > window.innerHeight;
+  const el = document.documentElement;
   if (isLandscape && !document.fullscreenElement) {
-    const el = document.documentElement;
     const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
     if (fn) fn.call(el).catch(()=>{});
   } else if (!isLandscape && document.fullscreenElement) {
@@ -164,7 +151,7 @@ async function loadAlbum() {
     if (!data.files || !data.files.length) { showErr('사진을 찾을 수 없습니다.\n드라이브 폴더 공유 설정을 확인해 주세요.'); return; }
     pages = data.files.map(f => {
       const base = f.name.replace(/\.[^.]+$/, '').toLowerCase();
-      let sortKey = base === 'cover' ? '000000' : base === 'back' ? 'zzzzzz' : base.replace(/\D/g,'').padStart(6,'0');
+      const sortKey = base === 'cover' ? '000000' : base === 'back' ? 'zzzzzz' : base.replace(/\D/g,'').padStart(6,'0');
       const isSingle = base === 'cover' || base === 'back' || base.replace(/\D/g,'').length <= 2;
       return { sortKey, type: isSingle ? 'single' : 'spread', url: `https://drive.google.com/thumbnail?id=${f.id}&sz=w1600` };
     }).sort((a,b) => a.sortKey.localeCompare(b.sortKey));
@@ -185,7 +172,6 @@ function render() {
   document.getElementById('counter').textContent = `${cur+1} / ${pages.length}`;
   document.getElementById('btn-prev').disabled = cur === 0;
   document.getElementById('btn-next').disabled = cur === pages.length - 1;
-
   const cached = cache[p.url];
   if (cached) {
     showImg(book, cached.cloneNode(), p.type);
@@ -201,7 +187,6 @@ function render() {
 
 function showImg(book, img, type) {
   img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-  if (isMobile) img.style.cursor = 'zoom-in';
   book.innerHTML = '';
   book.appendChild(img);
   if (type === 'spread') {
@@ -221,73 +206,80 @@ function go(dir) {
 document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') go(1);
   if (e.key === 'ArrowLeft')  go(-1);
-  if (e.key === 'Escape') closeZoom();
+  if (e.key === 'Escape' && zoomed) toggleZoom();
 });
 
-/* ── 터치: 스와이프 + 더블탭 확대 ── */
-let tx = 0, ty = 0, lastTap = 0;
+/* ── 터치: 스와이프 + 더블탭 ── */
+let tx = 0, ty = 0, lastTap = 0, zoomed = false;
+
 document.addEventListener('touchstart', e => {
-  if (document.getElementById('zoom-overlay').classList.contains('active')) return;
+  if (zoomed) return;
   tx = e.touches[0].clientX;
   ty = e.touches[0].clientY;
 }, {passive:true});
 
 document.addEventListener('touchend', e => {
-  if (document.getElementById('zoom-overlay').classList.contains('active')) return;
   const dx = e.changedTouches[0].clientX - tx;
   const dy = e.changedTouches[0].clientY - ty;
   const now = Date.now();
-  // 더블탭
-  if (now - lastTap < 300 && Math.abs(dx) < 20 && Math.abs(dy) < 20) {
-    if (isMobile) openZoom(pages[cur].url);
-    lastTap = 0; return;
+  const isDoubleTap = now - lastTap < 300 && Math.abs(dx) < 20 && Math.abs(dy) < 20;
+
+  if (isDoubleTap) {
+    if (isMobile) toggleZoom();
+    lastTap = 0;
+    return;
   }
   lastTap = now;
-  // 스와이프
-  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1);
+
+  if (!zoomed && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1);
 }, {passive:true});
 
-/* ── 확대 오버레이 (모바일 터치 드래그) ── */
-let zX = 0, zY = 0;
-let dragSX = 0, dragSY = 0;
-
-function openZoom(src) {
+/* ── 확대/축소 토글 ── */
+function toggleZoom() {
+  zoomed = !zoomed;
   const overlay = document.getElementById('zoom-overlay');
-  const img = document.getElementById('zoom-img');
-  zX = 0; zY = 0;
-  img.src = src;
-  img.style.width = '250%';
-  img.style.height = 'auto';
-  applyTransform();
-  overlay.classList.add('active');
+  const zImg = document.getElementById('zoom-img');
+  if (zoomed) {
+    zX = 0; zY = 0;
+    zImg.src = pages[cur].url;
+    // 화면에 꽉 차는 크기: 가로는 100vw, 세로는 100vh 중 큰 쪽
+    zImg.style.width = '100vw';
+    zImg.style.height = '100vh';
+    zImg.style.objectFit = 'contain';
+    zImg.style.transform = 'translate(0px, 0px)';
+    overlay.classList.add('active');
+  } else {
+    overlay.classList.remove('active');
+    zImg.src = '';
+  }
 }
 
-function closeZoom() {
-  document.getElementById('zoom-overlay').classList.remove('active');
-}
+/* ── 확대 상태에서 터치 드래그 ── */
+let zX = 0, zY = 0, dragSX = 0, dragSY = 0;
 
-function applyTransform() {
-  document.getElementById('zoom-img').style.transform = `translate(${zX}px, ${zY}px)`;
-}
-
-/* 터치 드래그 */
 const zOverlay = document.getElementById('zoom-overlay');
+
 zOverlay.addEventListener('touchstart', e => {
-  if (e.target.id === 'zoom-close') return;
   dragSX = e.touches[0].clientX - zX;
   dragSY = e.touches[0].clientY - zY;
 }, {passive:true});
 
 zOverlay.addEventListener('touchmove', e => {
   e.preventDefault();
-  if (e.target.id === 'zoom-close') return;
   zX = e.touches[0].clientX - dragSX;
   zY = e.touches[0].clientY - dragSY;
-  applyTransform();
+  document.getElementById('zoom-img').style.transform = `translate(${zX}px,${zY}px)`;
 }, {passive:false});
 
-/* 배경 탭으로 닫기 */
-zOverlay.addEventListener('click', e => { if (e.target === zOverlay) closeZoom(); });
+zOverlay.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - (dragSX + zX);
+  const dy = e.changedTouches[0].clientY - (dragSY + zY);
+  const now = Date.now();
+  if (now - lastTap < 300 && Math.abs(zX - (e.changedTouches[0].clientX - dragSX)) < 10) {
+    toggleZoom(); lastTap = 0; return;
+  }
+  lastTap = now;
+}, {passive:true});
 
 loadAlbum();
 </script>
