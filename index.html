@@ -2,51 +2,70 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>앨범 뷰어</title>
 <script src="apikey.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
   :root { --cream:#F5F0E8; --brown:#5C4A32; --light:#A08060; --gold:#C9A84C; --shadow:rgba(80,50,20,0.18); }
-  html, body { height:100%; background:var(--cream); font-family:'Noto Sans KR',sans-serif; color:var(--brown); overflow:hidden; }
-  #album-screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.8rem; padding:0 1rem; }
+  html, body { height:100%; background:var(--cream); font-family:'Noto Sans KR',sans-serif; color:var(--brown); overflow:hidden; touch-action:none; }
+
+  #album-screen {
+    position:fixed; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    gap:1.4rem; padding:0 1rem;
+  }
 
   .book {
     border-radius:3px; overflow:hidden;
     box-shadow:-6px 6px 20px var(--shadow), 6px 6px 20px var(--shadow), 0 2px 6px rgba(0,0,0,0.12);
-    transition:opacity 0.22s ease, transform 0.22s ease;
-    position:relative;
+    transition:opacity 0.22s ease, transform 0.3s ease;
+    position:relative; flex-shrink:0;
   }
   .book.turning { opacity:0; transform:scaleX(0.97); }
+  .book.zoomed {
+    transform:scale(1.8);
+    z-index:50;
+    box-shadow: 0 0 0 100vmax rgba(0,0,0,0.5);
+  }
 
   /* 단독(표지): 14:11 */
   .book.single {
-    width: min(55vw, calc(80vh * 14 / 11));
-    height: min(calc(55vw * 11 / 14), 80vh);
+    width: min(55vw, calc(72vh * 14 / 11));
+    height: min(calc(55vw * 11 / 14), 72vh);
   }
   /* 펼침: 28:11 */
   .book.spread {
-    width: min(90vw, calc(80vh * 28 / 11));
-    height: min(calc(90vw * 11 / 28), 80vh);
+    width: min(90vw, calc(72vh * 28 / 11));
+    height: min(calc(90vw * 11 / 28), 72vh);
   }
 
-  .book img {
-    width:100%; height:100%;
-    object-fit:cover; display:block;
+  /* 가로 모드 */
+  @media (orientation: landscape) {
+    #album-screen { gap:0.8rem; }
+    .book.single {
+      width: min(44vw, calc(82vh * 14 / 11));
+      height: min(calc(44vw * 11 / 14), 82vh);
+    }
+    .book.spread {
+      width: min(96vw, calc(82vh * 28 / 11));
+      height: min(calc(96vw * 11 / 28), 82vh);
+    }
+    .controls { gap:1rem; }
+    .kb-hint { display:none; }
   }
+
+  .book img { width:100%; height:100%; object-fit:cover; display:block; }
   .book .spine {
-    position:absolute; top:0; bottom:0;
-    left:50%; transform:translateX(-50%);
+    position:absolute; top:0; bottom:0; left:50%; transform:translateX(-50%);
     width:5px;
     background:linear-gradient(to right,#8A6A40 0%,#C9A070 30%,#B08050 50%,#8A6A40 100%);
-    box-shadow:inset -1px 0 2px rgba(0,0,0,0.2), inset 1px 0 2px rgba(255,255,255,0.1);
     pointer-events:none;
   }
   .book .loading-spinner {
-    position:absolute; inset:0;
-    display:flex; align-items:center; justify-content:center;
-    background:#FAF7F2;
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#FAF7F2;
   }
   .book .loading-spinner::after {
     content:''; width:28px; height:28px;
@@ -62,17 +81,15 @@
     color:var(--brown); font-size:20px; cursor:pointer;
     display:flex; align-items:center; justify-content:center;
     transition:background 0.15s, border-color 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color:transparent;
   }
   .ctrl-btn:hover:not(:disabled) { background:rgba(255,255,255,0.95); border-color:var(--gold); }
   .ctrl-btn:active:not(:disabled) { transform:scale(0.95); }
   .ctrl-btn:disabled { opacity:0.25; cursor:default; }
   .page-counter { font-size:13px; color:var(--light); letter-spacing:0.1em; min-width:70px; text-align:center; }
-  .kb-hint { position:fixed; bottom:1.5rem; font-size:11px; color:#C0B09A; letter-spacing:0.06em; }
-  .err { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--light); text-align:center; line-height:1.8; white-space:pre-line; padding:2rem; }
 
-  @media(max-width:500px) {
-    .ctrl-btn { width:38px; height:38px; font-size:17px; }
-  }
+  .kb-hint { font-size:11px; color:#C0B09A; letter-spacing:0.06em; }
+  .err { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--light); text-align:center; line-height:1.8; white-space:pre-line; padding:2rem; }
 </style>
 </head>
 <body>
@@ -94,7 +111,7 @@ const params  = new URLSearchParams(location.search);
 const FOLDER  = params.get('folder') || '';
 const API_KEY = window.GAPI_KEY || '';
 
-let pages = [], cur = 0;
+let pages = [], cur = 0, zoomed = false;
 
 async function loadAlbum() {
   if (!FOLDER) { showErr('폴더 정보가 없습니다.'); return; }
@@ -111,27 +128,19 @@ async function loadAlbum() {
     pages = data.files.map(f => {
       const base = f.name.replace(/\.[^.]+$/, '').toLowerCase();
       let sortKey;
-      if (base === 'cover')      sortKey = '000000';
-      else if (base === 'back')  sortKey = 'zzzzzz';
-      else                       sortKey = base.replace(/\D/g,'').padStart(6,'0');
-
-      // 표지/뒷표지 또는 2자리 숫자 → single (14:11)
-      // 나머지 → spread (28:11)
+      if (base === 'cover')     sortKey = '000000';
+      else if (base === 'back') sortKey = 'zzzzzz';
+      else                      sortKey = base.replace(/\D/g,'').padStart(6,'0');
       const isSingle = base === 'cover' || base === 'back' || base.replace(/\D/g,'').length <= 2;
-
       return {
-        name: f.name,
         sortKey,
         type: isSingle ? 'single' : 'spread',
         url: `https://drive.google.com/thumbnail?id=${f.id}&sz=w1600`
       };
     }).sort((a,b) => a.sortKey.localeCompare(b.sortKey));
 
-    cur = 0;
-    render();
-  } catch(e) {
-    showErr('불러오기 실패:\n' + e.message);
-  }
+    cur = 0; render();
+  } catch(e) { showErr('불러오기 실패:\n' + e.message); }
 }
 
 function showErr(msg) {
@@ -141,60 +150,81 @@ function showErr(msg) {
 function render() {
   const p    = pages[cur];
   const book = document.getElementById('book');
+  zoomed = false;
+  book.classList.remove('zoomed');
+  book.classList.remove('turning');
 
   document.getElementById('counter').textContent = `${cur+1} / ${pages.length}`;
   document.getElementById('btn-prev').disabled = cur === 0;
   document.getElementById('btn-next').disabled = cur === pages.length - 1;
 
-  // 책 비율 전환
-  book.className = 'book ' + p.type + ' turning';
-
-  // 로딩 스피너 표시
+  book.className = 'book ' + p.type;
   book.innerHTML = '<div class="loading-spinner"></div>';
-  if (p.type === 'spread') {
-    book.innerHTML += '<div class="spine"></div>';
-  }
+  if (p.type === 'spread') book.innerHTML += '<div class="spine"></div>';
 
-  // 이미지 로드
   const img = new Image();
   img.onload = () => {
     book.innerHTML = '';
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
     book.appendChild(img);
     if (p.type === 'spread') {
       const spine = document.createElement('div');
       spine.className = 'spine';
       book.appendChild(spine);
     }
-    setTimeout(() => book.classList.remove('turning'), 20);
   };
-  img.onerror = () => {
-    book.innerHTML = '<div class="err" style="position:absolute;inset:0;">이미지 오류</div>';
-    book.classList.remove('turning');
-  };
+  img.onerror = () => { book.innerHTML = '<div class="err" style="position:absolute;inset:0;">이미지 오류</div>'; };
   img.src = p.url;
-  img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
 }
 
 function go(dir) {
   const next = cur + dir;
   if (next < 0 || next >= pages.length) return;
+  if (zoomed) { toggleZoom(); return; }
   const book = document.getElementById('book');
   book.classList.add('turning');
   setTimeout(() => { cur = next; render(); }, 220);
 }
 
+function toggleZoom() {
+  const book = document.getElementById('book');
+  zoomed = !zoomed;
+  book.classList.toggle('zoomed', zoomed);
+}
+
+/* 키보드 */
 document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') go(1);
   if (e.key === 'ArrowLeft')  go(-1);
 });
-let tx = 0;
-document.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, {passive:true});
-document.addEventListener('touchend', e => {
-  const dx = e.changedTouches[0].clientX - tx;
-  if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+
+/* 스와이프 + 더블탭 */
+let tx = 0, ty = 0;
+let lastTap = 0;
+
+document.addEventListener('touchstart', e => {
+  tx = e.touches[0].clientX;
+  ty = e.touches[0].clientY;
 }, {passive:true});
 
-loadAlbum();
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - tx;
+  const dy = e.changedTouches[0].clientY - ty;
+  const now = Date.now();
+
+  // 더블탭 감지 (300ms 이내 두 번)
+  if (now - lastTap < 300 && Math.abs(dx) < 20 && Math.abs(dy) < 20) {
+    toggleZoom();
+    lastTap = 0;
+    return;
+  }
+  lastTap = now;
+
+  // 스와이프 (줌 상태에서는 무시)
+  if (!zoomed && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+    go(dx < 0 ? 1 : -1);
+  }
+}, {passive:true});
 </script>
 </body>
 </html>
