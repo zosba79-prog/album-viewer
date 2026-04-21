@@ -5,47 +5,99 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>앨범 뷰어</title>
 <script src="apikey.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400&family=Noto+Sans+KR:wght@300;400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root { --cream:#F5F0E8; --brown:#5C4A32; --light:#A08060; --gold:#C9A84C; --shadow:rgba(80,50,20,0.18); }
   html, body { height:100%; background:var(--cream); font-family:'Noto Sans KR',sans-serif; color:var(--brown); overflow:hidden; }
-  #album-screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-  .book-wrap { display:flex; flex-direction:column; align-items:center; gap:1.8rem; width:100%; padding:0 1rem; }
-  .book { display:flex; align-items:stretch; border-radius:3px; overflow:hidden; box-shadow:-6px 6px 20px var(--shadow),6px 6px 20px var(--shadow); max-width:min(88vw,760px); width:100%; aspect-ratio:2/1; transition:opacity 0.22s ease,transform 0.22s ease; }
+
+  #album-screen {
+    position:fixed; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    gap:1.8rem; padding:0 1rem;
+  }
+
+  /* 책 비율: 14x11 = 단독페이지, 28x11 = 펼침 */
+  .book {
+    display:flex; align-items:stretch;
+    border-radius:3px; overflow:hidden;
+    box-shadow: -6px 6px 20px var(--shadow), 6px 6px 20px var(--shadow), 0 2px 6px rgba(0,0,0,0.12);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    /* 기본: 펼침 상태 28:11 */
+    width: min(88vw, calc(88vh * 28 / 11));
+    max-width: 900px;
+    height: min(calc(88vw * 11 / 28), calc(88vh * 11 / 11));
+    aspect-ratio: unset;
+  }
+  .book.single-mode {
+    /* 단독 페이지: 14:11 */
+    width: min(55vw, calc(80vh * 14 / 11));
+    max-width: 560px;
+  }
   .book.turning { opacity:0; transform:scaleX(0.97); }
-  .book-page { flex:1; background:#FAF7F2; position:relative; overflow:hidden; }
-  .book-page img { width:100%;height:100%;object-fit:cover;display:block; }
-  .book-page::after { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(255,255,255,0.07) 0%,transparent 60%); pointer-events:none; }
-  .book-page.loading { display:flex; align-items:center; justify-content:center; }
-  .book-page.loading::before { content:''; width:28px; height:28px; border:2px solid #D4C4A8; border-top-color:var(--gold); border-radius:50%; animation:spin 0.8s linear infinite; }
+
+  .book-page {
+    flex:1; background:#FAF7F2;
+    position:relative; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .book-page img {
+    width:100%; height:100%;
+    object-fit:cover; display:block;
+  }
+  .book-page::after {
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(135deg,rgba(255,255,255,0.07) 0%,transparent 60%);
+    pointer-events:none;
+  }
+  .book-page.loading::before {
+    content:''; width:28px; height:28px;
+    border:2px solid #D4C4A8; border-top-color:var(--gold);
+    border-radius:50%; animation:spin 0.8s linear infinite;
+  }
   @keyframes spin { to { transform:rotate(360deg); } }
-  .book-spine { width:5px; flex-shrink:0; background:linear-gradient(to right,#8A6A40 0%,#C9A070 30%,#B08050 50%,#8A6A40 100%); }
+
+  .book-spine {
+    width:5px; flex-shrink:0;
+    background:linear-gradient(to right,#8A6A40 0%,#C9A070 30%,#B08050 50%,#8A6A40 100%);
+    box-shadow: inset -1px 0 2px rgba(0,0,0,0.2), inset 1px 0 2px rgba(255,255,255,0.1);
+  }
+
   .controls { display:flex; align-items:center; gap:1.5rem; }
-  .ctrl-btn { width:44px; height:44px; border-radius:50%; border:1px solid #D4C4A8; background:rgba(255,255,255,0.7); color:var(--brown); font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.15s,border-color 0.15s,transform 0.1s; }
+  .ctrl-btn {
+    width:44px; height:44px; border-radius:50%;
+    border:1px solid #D4C4A8; background:rgba(255,255,255,0.7);
+    color:var(--brown); font-size:20px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:background 0.15s, border-color 0.15s, transform 0.1s;
+  }
   .ctrl-btn:hover:not(:disabled) { background:rgba(255,255,255,0.95); border-color:var(--gold); }
   .ctrl-btn:active:not(:disabled) { transform:scale(0.95); }
   .ctrl-btn:disabled { opacity:0.25; cursor:default; }
   .page-counter { font-size:13px; color:var(--light); letter-spacing:0.1em; min-width:70px; text-align:center; }
+
   .kb-hint { position:fixed; bottom:1.5rem; font-size:11px; color:#C0B09A; letter-spacing:0.06em; }
-  .err { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--light); text-align:center; line-height:1.8; white-space:pre-line; }
-  @media(max-width:500px) { .book { aspect-ratio:3/2; } .book-spine { width:3px; } .ctrl-btn { width:38px; height:38px; font-size:17px; } }
+  .err { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--light); text-align:center; line-height:1.8; white-space:pre-line; padding:2rem; }
+
+  @media(max-width:500px) {
+    .book-spine { width:3px; }
+    .ctrl-btn { width:38px; height:38px; font-size:17px; }
+  }
 </style>
 </head>
 <body>
 
 <div id="album-screen">
-  <div class="book-wrap">
-    <div class="book" id="book">
-      <div class="book-page loading" id="page-left"></div>
-      <div class="book-spine" id="spine"></div>
-      <div class="book-page" id="page-right"></div>
-    </div>
-    <div class="controls">
-      <button class="ctrl-btn" id="btn-prev" onclick="go(-1)" disabled>&#8249;</button>
-      <div class="page-counter" id="counter"></div>
-      <button class="ctrl-btn" id="btn-next" onclick="go(1)">&#8250;</button>
-    </div>
+  <div class="book" id="book">
+    <div class="book-page loading" id="page-left"></div>
+    <div class="book-spine" id="spine"></div>
+    <div class="book-page" id="page-right"></div>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btn-prev" onclick="go(-1)" disabled>&#8249;</button>
+    <div class="page-counter" id="counter"></div>
+    <button class="ctrl-btn" id="btn-next" onclick="go(1)">&#8250;</button>
   </div>
   <div class="kb-hint">← → 키 또는 스와이프로 넘길 수 있어요</div>
 </div>
@@ -66,18 +118,28 @@ async function loadAlbum() {
       + `&fields=files(id,name)&orderBy=name&pageSize=200&key=${API_KEY}`;
     const res  = await fetch(url);
     const data = await res.json();
-    if (data.error) { showErr('드라이브 오류: ' + data.error.message); return; }
+    if (data.error) { showErr('드라이브 오류:\n' + data.error.message); return; }
     if (!data.files || !data.files.length) { showErr('사진을 찾을 수 없습니다.\n드라이브 폴더 공유 설정을 확인해 주세요.'); return; }
+
+    // 파일명에서 숫자만 추출해서 정렬 (01, 0203, 30 등)
     spreads = data.files
-      .sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true}))
-      .map(f => ({
-        type: f.name.replace(/\.[^.]+$/,'').length <= 2 ? 'single' : 'spread',
-        url:  `https://drive.google.com/thumbnail?id=${f.id}&sz=w1600`
-      }));
+      .map(f => {
+        const base = f.name.replace(/\.[^.]+$/, ''); // 확장자 제거
+        const digits = base.replace(/\D/g, '');      // 숫자만
+        return {
+          name: f.name,
+          base,
+          sortKey: digits.padStart(8, '0'),           // 앞에 0 채워서 정렬
+          type: digits.length <= 2 ? 'single' : 'spread',
+          url: `https://drive.google.com/thumbnail?id=${f.id}&sz=w1600`
+        };
+      })
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
     cur = 0;
     render();
   } catch(e) {
-    showErr('불러오기 실패: ' + e.message);
+    showErr('불러오기 실패:\n' + e.message);
   }
 }
 
@@ -91,22 +153,26 @@ function render() {
   const left  = document.getElementById('page-left');
   const right = document.getElementById('page-right');
   const spine = document.getElementById('spine');
-  document.getElementById('counter').textContent = `${cur+1} / ${spreads.length}`;
+
+  document.getElementById('counter').textContent = `${cur + 1} / ${spreads.length}`;
   document.getElementById('btn-prev').disabled = cur === 0;
   document.getElementById('btn-next').disabled = cur === spreads.length - 1;
+
   if (s.type === 'single') {
+    // 표지/뒷표지: 한 페이지, 14:11 비율
+    book.classList.add('single-mode');
     spine.style.display = 'none';
     right.style.display = 'none';
-    book.style.maxWidth = 'min(44vw, 390px)';
-    book.style.aspectRatio = '1/1';
+    setImg(left, s.url);
   } else {
+    // 펼침: 두 페이지, 28:11 비율 — 이미지 하나에 두 페이지가 담겨 있음
+    // 왼쪽에 전체 이미지, 오른쪽은 같은 이미지를 object-position으로 오른쪽 반만 보여줌
+    book.classList.remove('single-mode');
     spine.style.display = 'block';
-    right.style.display = 'block';
-    book.style.maxWidth = 'min(88vw, 760px)';
-    book.style.aspectRatio = '2/1';
-    right.innerHTML = '';
+    right.style.display = 'flex';
+    setImgHalf(left,  s.url, 'left');
+    setImgHalf(right, s.url, 'right');
   }
-  setImg(left, s.url);
 }
 
 function setImg(el, url) {
@@ -117,6 +183,30 @@ function setImg(el, url) {
   img.onerror = () => { el.classList.remove('loading'); el.textContent = '이미지 오류'; };
   img.src = url;
   img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+}
+
+function setImgHalf(el, url, side) {
+  // 한 이미지에 두 페이지가 붙어 있으므로 왼쪽/오른쪽 절반씩 보여줌
+  el.className = 'book-page loading';
+  el.innerHTML = '';
+  const img = new Image();
+  img.onload = () => {
+    el.classList.remove('loading');
+    el.appendChild(img);
+  };
+  img.onerror = () => { el.classList.remove('loading'); };
+  img.src = url;
+  // 이미지를 200% 너비로 키우고, 왼/오른쪽 절반만 보이게
+  img.style.cssText = `
+    position:absolute;
+    width:200%; height:100%;
+    object-fit:cover;
+    display:block;
+    left:${side === 'left' ? '0' : '-100%'};
+    top:0;
+  `;
+  el.style.position = 'relative';
+  el.style.overflow = 'hidden';
 }
 
 function go(dir) {
