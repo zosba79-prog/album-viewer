@@ -2,20 +2,23 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>앨범 뷰어</title>
-<script src="apikey.js"></script>
+<script src="apikey.js?v=20260421"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
   :root { --cream:#F5F0E8; --brown:#5C4A32; --light:#A08060; --gold:#C9A84C; --shadow:rgba(80,50,20,0.18); }
   html, body { height:100%; background:var(--cream); font-family:'Noto Sans KR',sans-serif; color:var(--brown); overflow:hidden; touch-action:none; }
-  #album-screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.4rem; padding:0 1rem; }
+  #album-screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; padding:0 0.5rem; }
   .book { border-radius:3px; overflow:hidden; box-shadow:-6px 6px 20px var(--shadow),6px 6px 20px var(--shadow),0 2px 6px rgba(0,0,0,0.12); transition:opacity 0.22s ease,transform 0.3s ease; position:relative; flex-shrink:0; }
   .book.turning { opacity:0; transform:scaleX(0.97); }
   .book.zoomed { transform:scale(1.8); z-index:50; box-shadow:0 0 0 100vmax rgba(0,0,0,0.5); }
-  .book.single { width:min(55vw,calc(72vh * 14/11)); height:min(calc(55vw * 11/14),72vh); }
-  .book.spread { width:min(90vw,calc(72vh * 28/11)); height:min(calc(90vw * 11/28),72vh); }
+  .book.single { width:min(92vw,calc(78vh * 14/11)); height:min(calc(92vw * 11/14),78vh); }
+  .book.spread { width:min(96vw,calc(78vh * 28/11)); height:min(calc(96vw * 11/28),78vh); }
   @media (orientation:landscape) {
     #album-screen { gap:0.8rem; }
     .book.single { width:min(44vw,calc(82vh * 14/11)); height:min(calc(44vw * 11/14),82vh); }
