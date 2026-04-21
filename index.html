@@ -138,14 +138,14 @@ let pages = [], cur = 0;
 const cache = {};
 let zoomed = false;
 let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
+let exiting = false;
 
 /* ── 가로/세로 감지 ── */
 function updateOrientation() {
-  if (!isMobile) return;
+  if (!isMobile || exiting) return;
   const isLandscape = window.innerWidth > window.innerHeight;
   if (isLandscape) {
     document.body.classList.add('is-landscape');
-    // 전체화면 진입
     if (!document.fullscreenElement) {
       const el = document.documentElement;
       const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
@@ -157,16 +157,24 @@ function updateOrientation() {
 }
 
 function exitFullscreenMode() {
-  // 전체화면 해제
+  // 1. 먼저 세로 방향 잠금 → orientation 이벤트가 다시 전체화면 진입하는 걸 막음
+  exiting = true;
+  document.body.classList.remove('is-landscape');
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('portrait').catch(() => {});
+    }
+  } catch(e) {}
+  // 2. 전체화면 해제
   if (document.fullscreenElement) {
     const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
     if (fn) fn.call(document).catch(() => {});
   }
-  document.body.classList.remove('is-landscape');
-  // 세로 방향 잠금 시도
-  try {
-    if (screen.orientation && screen.orientation.lock) screen.orientation.lock('portrait').catch(() => {});
-  } catch(e) {}
+  // 3. 잠시 후 잠금 해제 (세로 고정 유지 후 자유롭게)
+  setTimeout(() => {
+    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch(e) {}
+    exiting = false;
+  }, 1500);
 }
 
 window.addEventListener('orientationchange', () => setTimeout(updateOrientation, 350));
