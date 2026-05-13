@@ -147,16 +147,11 @@ function exitFullscreenMode() {
     const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
     if (fn) fn.call(document).catch(() => {});
   }
-  // 안내: 세로로 돌리세요 삭제됨
+
 }
 
 function showFullscreenHint() {
   const hint = document.getElementById('fs-hint');
-  if (hint) { hint.style.opacity = '1'; setTimeout(() => { hint.style.opacity = '0'; }, 2000); }
-}
-
-function showExitHint() {
-  const hint = document.getElementById('exit-hint');
   if (hint) { hint.style.opacity = '1'; setTimeout(() => { hint.style.opacity = '0'; }, 2000); }
 }
 
