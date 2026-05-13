@@ -142,8 +142,8 @@ function exitFullscreenMode() {
 window.addEventListener('orientationchange', () => setTimeout(updateOrientation, 350));
 window.addEventListener('resize', () => setTimeout(updateOrientation, 350));
 
-// 터치 시점에도 체크 (orientationchange만으로 fullscreen 못 잡는 브라우저 대응)
-document.addEventListener('touchstart', () => {
+// touchend 시점에 체크 (requestFullscreen은 touchend에서만 허용)
+document.addEventListener('touchend', () => {
   if (isMobile && !userExited) updateOrientation();
 }, {passive: true});
 
