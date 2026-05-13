@@ -166,6 +166,7 @@ async function loadAlbum() {
       return { sortKey, type: isSingle ? 'single' : 'spread', url: `https://drive.google.com/thumbnail?id=${f.id}&sz=w1600` };
     }).sort((a,b) => a.sortKey.localeCompare(b.sortKey));
     cur = 0; preload(0); preload(1); preload(2); render();
+    setTimeout(() => { if (isMobile) updateOrientation(); }, 100);
   } catch(e) { showErr('불러오기 실패:\n' + e.message); }
 }
 
@@ -268,7 +269,6 @@ document.addEventListener('keydown', e => {
 });
 
 loadAlbum();
-if (isMobile) updateOrientation();
 </script>
 </body>
 </html>
