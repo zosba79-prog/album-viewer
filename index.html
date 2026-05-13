@@ -103,6 +103,15 @@
 <button id="btn-exit" onclick="exitFullscreenMode()">✕</button>
 <div id="zoom-overlay"><img id="zoom-img" draggable="false" /></div>
 
+<!-- 전체화면 안내 (가로 모드에서 전체화면 실패 시) -->
+<div id="fs-hint" style="position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);color:#fff;font-size:15px;letter-spacing:0.05em;opacity:0;transition:opacity 0.4s;pointer-events:none;">
+  화면을 한 번 터치해 주세요
+</div>
+<!-- X 후 안내 -->
+<div id="exit-hint" style="position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);color:#fff;font-size:15px;letter-spacing:0.05em;opacity:0;transition:opacity 0.4s;pointer-events:none;">
+  폰을 세로로 돌려주세요
+</div>
+
 <script>
 const params  = new URLSearchParams(location.search);
 const FOLDER  = params.get('folder') || '';
@@ -113,30 +122,46 @@ let pages = [], cur = 0;
 const cache = {};
 let zoomed = false;
 let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
-let userExited = false; // X 누르면 true → 페이지 새로고침 전까지 전체화면 재진입 안 함
+let userExited = false;
 
 function updateOrientation() {
-  if (!isMobile || userExited) return;
+  if (!isMobile) return;
   const isLandscape = window.innerWidth > window.innerHeight;
-  if (isLandscape) {
+  if (isLandscape && !userExited) {
     document.body.classList.add('is-landscape');
     if (!document.fullscreenElement) {
       const el = document.documentElement;
       const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-      if (fn) fn.call(el).catch(() => {});
+      if (fn) fn.call(el).catch(() => {
+        // 전체화면 실패 시 안내 오버레이 표시
+        showFullscreenHint();
+      });
     }
-  } else {
+  } else if (!isLandscape) {
     document.body.classList.remove('is-landscape');
+    userExited = false; // 세로로 돌아오면 다시 가로 전체화면 허용
   }
 }
 
 function exitFullscreenMode() {
-  userExited = true; // 영구 차단 — 새로고침 전까지 전체화면 재진입 없음
+  userExited = true; // 이번 가로 세션만 차단
   document.body.classList.remove('is-landscape');
   if (document.fullscreenElement) {
     const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
     if (fn) fn.call(document).catch(() => {});
   }
+  // 안내: 세로로 돌리세요
+  showExitHint();
+}
+
+function showFullscreenHint() {
+  const hint = document.getElementById('fs-hint');
+  if (hint) { hint.style.opacity = '1'; setTimeout(() => { hint.style.opacity = '0'; }, 2000); }
+}
+
+function showExitHint() {
+  const hint = document.getElementById('exit-hint');
+  if (hint) { hint.style.opacity = '1'; setTimeout(() => { hint.style.opacity = '0'; }, 2000); }
 }
 
 window.addEventListener('orientationchange', () => setTimeout(updateOrientation, 350));
