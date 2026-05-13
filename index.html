@@ -107,10 +107,7 @@
 <div id="fs-hint" style="position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);color:#fff;font-size:15px;letter-spacing:0.05em;opacity:0;transition:opacity 0.4s;pointer-events:none;">
   화면을 한 번 터치해 주세요
 </div>
-<!-- X 후 안내 -->
-<div id="exit-hint" style="position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);color:#fff;font-size:15px;letter-spacing:0.05em;opacity:0;transition:opacity 0.4s;pointer-events:none;">
-  폰을 세로로 돌려주세요
-</div>
+
 
 <script>
 const params  = new URLSearchParams(location.search);
@@ -150,8 +147,7 @@ function exitFullscreenMode() {
     const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
     if (fn) fn.call(document).catch(() => {});
   }
-  // 안내: 세로로 돌리세요
-  showExitHint();
+  // 안내: 세로로 돌리세요 삭제됨
 }
 
 function showFullscreenHint() {
